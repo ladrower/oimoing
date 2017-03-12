@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Tipping Point Proto</title>
+
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<meta http-equiv="X-UA-Compatible" content="IE=11">
+<meta http-equiv="Pragma" content="no-cache">
+
+<script src="js/three.js"></script>
+<script src="js/OrbitControls.js"></script>
+<!--<script src="./Oimo.js_files/ShaderShadow.js"></script>-->
+<!--<script src="./Oimo.js_files/Tween.js"></script>-->
+
+
+    <style>
+        * {  margin: 0; padding: 0; border: 0;}
+        body { background-color: #585858; overflow: hidden; color: #eeeeee; font-family: monospace; font-size: 15px; }
+        #info{ pointer-events:none; position: absolute; left:10px; top:50px; width: 400px; height: 400px; z-index: 1;}
+    </style>
+
+</head>
+
+<body>
+
+<div id="info"></div>
+
+<script>
+
+var worker, canvas, renderer, scene, camera, controls, cameraGroup,
+    light, ambient,
+    imagesLoader,
+    helper;
+
+var dt = 1/60;
+var fps=0, time, time_prev=0, fpsint = 0;
+
+var world = null;
+var N = 102;
+var minfo = new Float32Array(N*8);
+var oimoInfo = 0;
+var meshes = [];
+
+var pin;
+
+
+var coinMat1 = new THREE.MeshLambertMaterial({color: 0x999999});
+var coinMat2 = new THREE.MeshLambertMaterial({color: 0x333333});
+var coinMatSleep = new THREE.MeshLambertMaterial({color: 0x20e8da});
+
+var infoEl = document.getElementById("info");
+
+
+initScene();
+initPhysics();
+run();
+
+
+function initScene () {
+    canvas = document.createElement("canvas");
+    canvas.className = 'canvas3d';
+    canvas.oncontextmenu = function(e){ e.preventDefault(); };
+    canvas.ondrop = function(e) { e.preventDefault(); };
+    document.body.appendChild( canvas );
+
+    renderer = new THREE.WebGLRenderer({ canvas:canvas, antialias:true, alpha:false });
+    //renderer = new THREE.WebGLRenderer({ canvas:canvas, precision:"mediump", antialias:true, alpha:false });
+
+    renderer.setClearColor( 0x252525, 1 );
+    renderer.setPixelRatio( window.devicePixelRatio );
+
+    // SCENE
+
+    scene = new THREE.Scene();
+
+    // CAMERA / CONTROLER
+
+    camera = new THREE.PerspectiveCamera( 60 , 1 , 1, 100 );
+    camera.position.set( 10, 10, 10 );
+
+    controls = new THREE.OrbitControls( camera, canvas );
+    controls.target.set( 0, 0, 0 );
+    controls.enableKeys = false;
+    controls.update();
+
+    cameraGroup = new THREE.Group();
+    scene.add( cameraGroup );
+    cameraGroup.add( camera );
+
+    // LIGHTS
+
+    light = new THREE.DirectionalLight( 0xffffff, 1 );
+    light.position.set( -3, 100, 5 );
+    light.lookAt( new THREE.Vector3() );
+    scene.add( light );
+
+    ambient = new THREE.AmbientLight( 0x444444 );
+    scene.add( ambient );
+
+    // IMAGE LOADER
+    // imagesLoader = new THREE.TextureLoader();
+
+    // GROUND
+
+    helper = new THREE.GridHelper( 50, 20, 0xff3737, 0xFFFFFF );
+    helper.material = new THREE.LineBasicMaterial( { vertexColors: THREE.VertexColors } );
+    scene.add( helper );
+
+    var groundGeom = new THREE.BoxBufferGeometry(50, 50, 50);
+    var groundMesh = new THREE.Mesh(groundGeom, new THREE.MeshBasicMaterial({color: 0xcee0de}));
+    groundMesh.position.y = -25;
+    scene.add(groundMesh);
+
+    // COINS
+
+    var size = [1,0.1,1];
+    var coinGeom = new THREE.CylinderBufferGeometry(size[0]/2, size[2]/2, size[1], 24);
+
+    for(var i = 0; i < N; i++){
+        var coinMesh = new THREE.Mesh(coinGeom, i < N/2 ? coinMat1 : coinMat2);
+        scene.add(coinMesh);
+        meshes.push(coinMesh);
+    }
+
+    pin = new THREE.Mesh(new THREE.BoxBufferGeometry(0.1,0.1,1), coinMat1);
+    scene.add(pin);
+
+    resize();
+
+    window.addEventListener( 'resize', resize, false );
+
+}
+
+function run () {
+    worker.postMessage({  N:N, dt: dt, oimoUrl:document.location.href.replace(/\/[^/]*$/,"/") + "js/oimo.js" } );
+    animate();
+}
+
+function animate () {
+    requestAnimationFrame( animate );
+    renderer.render( scene, camera );
+    displayInfo();
+
+}
+
+function resize () {
+    var h = window.innerHeight;
+    var w = window.innerWidth;
+
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize( w, h );
+}
+
+function initPhysics() {
+    // Create worker
+    worker = new Worker('js/worker.js');
+    worker.postMessage = worker.webkitPostMessage || worker.postMessage;
+    worker.onmessage = function(e) {
+
+        // stat
+        oimoInfo = e.data.perf;
+        // Get fresh data from the worker
+        minfo = e.data.minfo;
+        var n = 0;
+        meshes.forEach( function ( b, id ) {
+            n = id*8;
+            if(minfo[n+7]!==1){
+                b.position.fromArray( minfo, n);
+                b.quaternion.fromArray( minfo, n+3 );
+            } else {
+//                b.material = coinMatSleep;
+            }
+        });
+
+        pin.position.fromArray( e.data.pindata, 0);
+        pin.quaternion.fromArray( e.data.pindata, 3);
+    };
+}
+
+
+function displayInfo(){
+    time = Date.now();
+    if (time - 1000 > time_prev) {
+        time_prev = time; fpsint = fps; fps = 0;
+    } fps++;
+    var info =[
+        "Physics: " + oimoInfo +" Hz ("+ (oimoInfo*dt*100).toFixed()+"%)<br>",
+        "Render: " + fpsint +" fps ("+ (fpsint/0.6).toFixed()+"%)<br>"
+    ].join("\n");
+    infoEl.innerHTML = info;
+}
+
+
+</script>
+
+</body></html>
