@@ -31,11 +31,11 @@ var worker, canvas, renderer, scene, camera, controls, cameraGroup,
     imagesLoader,
     helper;
 
-var dt = 1/60;
+var dt = 1/30;
 var fps=0, time, time_prev=0, fpsint = 0;
 
 var world = null;
-var N = 102;
+var N = 100;
 var minfo = new Float32Array(N*8);
 var oimoInfo = 0;
 var meshes = [];
@@ -45,7 +45,7 @@ var pin;
 
 var coinMat1 = new THREE.MeshLambertMaterial({color: 0x999999});
 var coinMat2 = new THREE.MeshLambertMaterial({color: 0x333333});
-var coinMatSleep = new THREE.MeshLambertMaterial({color: 0x20e8da});
+var coinMatSleep = new THREE.MeshLambertMaterial({color: 0x4286f4});
 
 var infoEl = document.getElementById("info");
 
@@ -121,8 +121,14 @@ function initScene () {
         meshes.push(coinMesh);
     }
 
-    pin = new THREE.Mesh(new THREE.BoxBufferGeometry(0.1,0.1,1), coinMat1);
-    scene.add(pin);
+
+    var moverMesh = new THREE.Mesh(new THREE.BoxBufferGeometry(15, 1, 5), new THREE.MeshLambertMaterial({color: 0xcee0de}));
+    moverMesh.position.set(0, 0.5, -10);
+    scene.add(moverMesh);
+    meshes.push(moverMesh);
+
+//    pin = new THREE.Mesh(new THREE.BoxBufferGeometry(0.1,0.1,1), coinMat1);
+//    scene.add(pin);
 
     resize();
 
@@ -172,8 +178,8 @@ function initPhysics() {
             }
         });
 
-        pin.position.fromArray( e.data.pindata, 0);
-        pin.quaternion.fromArray( e.data.pindata, 3);
+//        pin.position.fromArray( e.data.pindata, 0);
+//        pin.quaternion.fromArray( e.data.pindata, 3);
     };
 }
 
